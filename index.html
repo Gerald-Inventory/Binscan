@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bin Scanner App</title>
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --primary-hover: #1d4ed8;
+            --success: #16a34a;
+            --danger: #dc2626;
+            --background: #f8fafc;
+            --card: #ffffff;
+            --text: #1e293b;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        body {
+            background-color: var(--background);
+            color: var(--text);
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 500px;
+            background: var(--card);
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        h2 {
+            margin-bottom: 20px;
+            text-align: center;
+            color: var(--primary);
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+
+        input[type="text"], input[type="number"] {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            font-size: 1rem;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        input:focus {
+            border-color: var(--primary);
+        }
+
+        button {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+            margin-top: 10px;
+        }
+
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-primary:hover { background: var(--primary-hover); }
+        .btn-success { background: var(--success); color: white; }
+        .btn-danger { background: var(--danger); color: white; }
+
+        #reader {
+            width: 100%;
+            background: #000;
+            border-radius: 8px;
+            overflow: hidden;
+            margin-top: 10px;
+            display: none;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        .log-container {
+            margin-top: 25px;
+            border-top: 2px solid #e2e8f0;
+            padding-top: 15px;
+        }
+
+        .log-title {
+            font-weight: 600;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .log-list {
+            max-height: 200px;
+            overflow-y: auto;
+            list-style: none;
+        }
+
+        .log-item {
+            background: #f1f5f9;
+            padding: 8px 12px;
+            border-radius: 6px;
+            margin-bottom: 5px;
+            font-size: 0.85rem;
+            display: flex;
+            justify-content: space-between;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Bin Scanner Portal</h2>
+
+    <div class="form-group">
+        <label for="department">Department Name</label>
+        <input type="text" id="department" placeholder="e.g., Receiving, Aisle 4">
+    </div>
+
+    <button id="start-scan-btn" class="btn-primary">Open Camera Scanner</button>
+    <div id="reader"></div>
+    <button id="stop-scan-btn" class="btn-danger hidden">Cancel Scan</button>
+
+    <div id="data-entry-section" class="hidden" style="margin-top: 20px;">
+        <div class="form-group">
+            <label for="bin-number">Scanned Bin Number</label>
+            <input type="text" id="bin-number" readonly>
+        </div>
+        <div class="form-group">
+            <label for="quantity">Quantity</label>
+            <input type="number" id="quantity" placeholder="Enter quantity" inputmode="numeric">
+        </div>
+        <button id="save-btn" class="btn-success">Save Entry</button>
+    </div>
+
+    <div class="log-container">
+        <div class="log-title">
+            <span>Recent Scans (<span id="scan-count">0</span>)</span>
+            <button id="export-btn" class="btn-success" style="width: auto; padding: 6px 12px; margin: 0; font-size: 0.85rem;">Export CSV</button>
+        </div>
+        <ul id="log-list" class="log-list">
+            </ul>
+    </div>
+</div>
+
+<script>
+    let html5QrcodeScanner = null;
+    let scannedDataList = [];
+
+    const deptInput = document.getElementById('department');
+    const binInput = document.getElementById('bin-number');
+    const qtyInput = document.getElementById('quantity');
+    
+    const startBtn = document.getElementById('start-scan-btn');
+    const stopBtn = document.getElementById('stop-scan-btn');
+    const saveBtn = document.getElementById('save-btn');
+    const exportBtn = document.getElementById('export-btn');
+    
+    const readerDiv = document.getElementById('reader');
+    const dataEntrySection = document.getElementById('data-entry-section');
+    const logList = document.getElementById('log-list');
+    const scanCount = document.getElementById('scan-count');
+
+    // Start Scanning (forces environment/rear camera)
+    startBtn.addEventListener('click', () => {
+        if (!deptInput.value.trim()) {
+            alert('Please enter a Department Name before scanning.');
+            return;
+        }
+
+        readerDiv.style.display = 'block';
+        startBtn.classList.add('hidden');
+        stopBtn.classList.remove('hidden');
+
+        html5QrcodeScanner = new Html5Qrcode("reader");
+        
+        html5QrcodeScanner.start(
+            { facingMode: "environment" }, // Forces rear camera
+            {
+                fps: 10,
+                qrbox: { width: 250, height: 250 } // Framing box for barcode alignment
+            },
+            (decodedText) => {
+                // On Success Scan
+                binInput.value = decodedText;
+                dataEntrySection.classList.remove('hidden');
+                qtyInput.focus(); // Auto focus quantity for fast mobile entry
+                stopScanner();
+            },
+            (errorMessage) => {
+                // Verbose parsing errors can be ignored safely
+            }
+        ).catch((err) => {
+            alert("Camera initialization failed: " + err);
+            stopScanner();
+        });
+    });
+
+    stopBtn.addEventListener('click', stopScanner);
+
+    function stopScanner() {
+        if (html5QrcodeScanner) {
+            html5QrcodeScanner.stop().then(() => {
+                readerDiv.style.display = 'none';
+                startBtn.classList.remove('hidden');
+                stopBtn.classList.add('hidden');
+            }).catch(err => console.error(err));
+        }
+    }
+
+    // Save Entry to Memory
+    saveBtn.addEventListener('click', () => {
+        const dept = deptInput.value.trim();
+        const bin = binInput.value.trim();
+        const qty = qtyInput.value.trim();
+
+        if (!qty || isNaN(qty) || parseInt(qty) < 0) {
+            alert('Please enter a valid quantity.');
+            return;
+        }
+
+        const entry = {
+            timestamp: new Date().toLocaleString(),
+            department: dept,
+            binNumber: bin,
+            quantity: qty
+        };
+
+        scannedDataList.push(entry);
+        updateLogUI();
+
+        // Reset fields for next scan
+        binInput.value = '';
+        qtyInput.value = '';
+        dataEntrySection.classList.add('hidden');
+    });
+
+    // Update the UI Log list
+    function updateLogUI() {
+        logList.innerHTML = '';
+        scanCount.textContent = scannedDataList.length;
+
+        // Display items reverse-chronologically (newest on top)
+        [...scannedDataList].reverse().forEach(item => {
+            const li = document.createElement('li');
+            li.className = 'log-item';
+            li.innerHTML = `
+                <span><strong>${item.binNumber}</strong> (${item.department})</span>
+                <span>Qty: ${item.quantity}</span>
+            `;
+            logList.appendChild(li);
+        });
+    }
+
+    // Export Memory Array to CSV File
+    exportBtn.addEventListener('click', () => {
+        if (scannedDataList.length === 0) {
+            alert('No data to export yet!');
+            return;
+        }
+
+        let csvContent = "data:text/csv;charset=utf-8,";
+        csvContent += "Timestamp,Department,Bin Number,Quantity\n"; // Headers
+
+        scannedDataList.forEach(row => {
+            // Escape quotes just in case text contains commas
+            const formattedDept = `"${row.department.replace(/"/g, '""')}"`;
+            const formattedBin = `"${row.binNumber.replace(/"/g, '""')}"`;
+            csvContent += `${row.timestamp},${formattedDept},${formattedBin},${row.quantity}\n`;
+        });
+
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        
+        // Dynamic file name with date stamp
+        const dateStr = new Date().toISOString().slice(0,10);
+        link.setAttribute("download", `bin_scan_report_${dateStr}.csv`);
+        
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    });
+</script>
+</body>
+</html>

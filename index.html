@@ -3,17 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bin Scanner App</title>
-    <script src="https://unpkg.com/html5-qrcode"></script>
+    <title>Bin Count Portal</title>
     <style>
         :root {
-            --primary: #2563eb;
-            --primary-hover: #1d4ed8;
+            --primary: #1e3a8a;
+            --primary-light: #eff6ff;
+            --accent: #2563eb;
             --success: #16a34a;
-            --danger: #dc2626;
-            --background: #f8fafc;
-            --card: #ffffff;
-            --text: #1e293b;
+            --text-dark: #1e293b;
+            --text-muted: #64748b;
+            --bg: #f8fafc;
+            --card-bg: #ffffff;
+            --border: #cbd5e1;
         }
 
         * {
@@ -24,288 +25,477 @@
         }
 
         body {
-            background-color: var(--background);
-            color: var(--text);
-            padding: 15px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
+            background-color: var(--bg);
+            color: var(--text-dark);
+            padding: 12px;
+            font-size: 16px; /* Prevents iOS auto-zoom on input focus */
         }
 
         .container {
             width: 100%;
-            max-width: 500px;
-            background: var(--card);
-            padding: 20px;
-            border-radius: 12px;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            max-width: 550px;
+            margin: 0 auto;
         }
 
-        h2 {
-            margin-bottom: 20px;
+        header {
             text-align: center;
+            margin-bottom: 15px;
+            padding: 10px 0;
+        }
+
+        header h1 {
+            font-size: 1.4rem;
             color: var(--primary);
+            font-weight: 700;
+        }
+
+        .card {
+            background: var(--card-bg);
+            border-radius: 12px;
+            padding: 16px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            margin-bottom: 15px;
+            border: 1px solid #e2e8f0;
+        }
+
+        .card-title {
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
         }
 
         .form-group {
-            margin-bottom: 15px;
+            margin-bottom: 12px;
+        }
+
+        .form-group:last-child {
+            margin-bottom: 0;
         }
 
         label {
             display: block;
-            margin-bottom: 5px;
+            font-size: 0.85rem;
             font-weight: 600;
+            margin-bottom: 4px;
+            color: var(--text-dark);
+        }
+
+        input[type="file"] {
+            width: 100%;
+            padding: 10px;
+            background: var(--primary-light);
+            border: 2px dashed var(--accent);
+            border-radius: 8px;
+            cursor: pointer;
             font-size: 0.9rem;
         }
 
-        input[type="text"], input[type="number"] {
+        select, input[type="text"], input[type="number"] {
             width: 100%;
             padding: 12px;
-            border: 1px solid #cbd5e1;
+            border: 1px solid var(--border);
             border-radius: 8px;
             font-size: 1rem;
+            background-color: #fff;
+            color: var(--text-dark);
             outline: none;
             transition: border-color 0.2s;
         }
 
-        input:focus {
-            border-color: var(--primary);
+        select:focus, input:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
         }
 
-        button {
+        .btn {
             width: 100%;
-            padding: 12px;
+            padding: 14px;
             border: none;
             border-radius: 8px;
             font-size: 1rem;
             font-weight: 600;
             cursor: pointer;
-            transition: background 0.2s;
-            margin-top: 10px;
+            transition: opacity 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
         }
 
-        .btn-primary { background: var(--primary); color: white; }
-        .btn-primary:hover { background: var(--primary-hover); }
-        .btn-success { background: var(--success); color: white; }
-        .btn-danger { background: var(--danger); color: white; }
-
-        #reader {
-            width: 100%;
-            background: #000;
-            border-radius: 8px;
-            overflow: hidden;
-            margin-top: 10px;
-            display: none;
+        .btn:active {
+            opacity: 0.8;
         }
 
-        /* Adjusts internal html5-qrcode video layer for better responsiveness */
-        #reader video {
-            object-fit: cover !important;
+        .btn-success {
+            background-color: var(--success);
+            color: white;
+        }
+
+        .btn-primary {
+            background-color: var(--accent);
+            color: white;
+        }
+
+        /* Results Tile Styling */
+        .bin-tile {
+            background: var(--primary-light);
+            border-left: 4px solid var(--accent);
+            padding: 12px;
+            border-radius: 0 8px 8px 0;
+            margin-bottom: 12px;
+        }
+
+        .tile-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+
+        .tile-field .label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+        }
+
+        .tile-field .value {
+            font-weight: 600;
+            font-size: 0.95rem;
+            word-break: break-all;
+        }
+
+        .tile-field.full-width {
+            grid-column: span 2;
+        }
+
+        .qty-update-row {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            margin-top: 10px;
+            background: #fff;
+            padding: 8px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+        }
+
+        .qty-update-row input {
+            flex: 1;
+            padding: 8px;
+        }
+
+        .qty-update-row button {
+            width: auto;
+            padding: 10px 16px;
+            margin: 0;
         }
 
         .hidden {
             display: none !important;
         }
 
-        .log-container {
-            margin-top: 25px;
-            border-top: 2px solid #e2e8f0;
-            padding-top: 15px;
-        }
-
-        .log-title {
-            font-weight: 600;
-            margin-bottom: 10px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .log-list {
-            max-height: 200px;
-            overflow-y: auto;
-            list-style: none;
-        }
-
-        .log-item {
-            background: #f1f5f9;
-            padding: 8px 12px;
-            border-radius: 6px;
-            margin-bottom: 5px;
+        .status-msg {
             font-size: 0.85rem;
-            display: flex;
-            justify-content: space-between;
+            text-align: center;
+            margin-top: 5px;
+            color: var(--success);
+            font-weight: 500;
+        }
+
+        #results-container {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .no-results {
+            text-align: center;
+            color: var(--text-muted);
+            font-style: italic;
+            padding: 15px 0;
+            font-size: 0.9rem;
         }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h2>Bin Scanner Portal</h2>
+    <header>
+        <h1>Bin Counter Portal</h1>
+    </header>
 
-    <div class="form-group">
-        <label for="department">Department Name</label>
-        <input type="text" id="department" placeholder="e.g., Receiving, Warehouse A">
+    <div class="card">
+        <div class="card-title">1. Load Inventory File</div>
+        <div class="form-group">
+            <label for="csv-file">Upload Bins CSV (BIN, DEP, DIV, QTY)</label>
+            <input type="file" id="csv-file" accept=".csv">
+            <div id="upload-status" class="status-msg hidden">File loaded successfully!</div>
+        </div>
     </div>
 
-    <button id="start-scan-btn" class="btn-primary">Open Camera Scanner</button>
-    <div id="reader"></div>
-    <button id="stop-scan-btn" class="btn-danger hidden">Cancel Scan</button>
+    <div id="workflow-section" class="hidden">
+        <div class="card">
+            <div class="card-title">2. Filter & Locate Bins</div>
+            
+            <div class="form-group">
+                <label for="filter-div">Division (DIV)</label>
+                <select id="filter-div">
+                    <option value="">-- All Divisions --</option>
+                </select>
+            </div>
 
-    <div id="data-entry-section" class="hidden" style="margin-top: 20px;">
-        <div class="form-group">
-            <label for="bin-number">Scanned Bin Number</label>
-            <input type="text" id="bin-number" readonly>
-        </div>
-        <div class="form-group">
-            <label for="quantity">Quantity</label>
-            <input type="number" id="quantity" placeholder="Enter quantity" inputmode="numeric">
-        </div>
-        <button id="save-btn" class="btn-success">Save Entry</button>
-    </div>
+            <div class="form-group">
+                <label for="filter-dep">Department (DEP)</label>
+                <select id="filter-dep">
+                    <option value="">-- All Departments --</option>
+                </select>
+            </div>
 
-    <div class="log-container">
-        <div class="log-title">
-            <span>Recent Scans (<span id="scan-count">0</span>)</span>
-            <button id="export-btn" class="btn-success" style="width: auto; padding: 6px 12px; margin: 0; font-size: 0.85rem;">Export CSV</button>
+            <div class="form-group" style="margin-top: 15px;">
+                <label for="search-box">Search Bin Number</label>
+                <input type="text" id="search-box" placeholder="Type letters or numbers...">
+            </div>
         </div>
-        <ul id="log-list" class="log-list">
-            </ul>
+
+        <div class="card">
+            <div class="card-title">3. Matching Bin Tiles</div>
+            <div id="results-container">
+                <div class="no-results">Use filters or search above to load matching bins.</div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-title">4. Complete Session</div>
+            <button id="export-btn" class="btn btn-success">
+                Export Counts to CSV
+            </button>
+        </div>
     </div>
 </div>
 
 <script>
-    let html5QrcodeScanner = null;
-    let scannedDataList = [];
+    // Global variable holding parsed master CSV rows
+    let inventoryData = [];
 
-    const deptInput = document.getElementById('department');
-    const binInput = document.getElementById('bin-number');
-    const qtyInput = document.getElementById('quantity');
-    
-    const startBtn = document.getElementById('start-scan-btn');
-    const stopBtn = document.getElementById('stop-scan-btn');
-    const saveBtn = document.getElementById('save-btn');
+    // Track original headers case and order to ensure we export identically
+    let csvHeaders = ['BIN', 'DEP', 'DIV', 'QTY']; 
+
+    // DOM Elements
+    const fileInput = document.getElementById('csv-file');
+    const uploadStatus = document.getElementById('upload-status');
+    const workflowSection = document.getElementById('workflow-section');
+    const divSelect = document.getElementById('filter-div');
+    const depSelect = document.getElementById('filter-dep');
+    const searchBox = document.getElementById('search-box');
+    const resultsContainer = document.getElementById('results-container');
     const exportBtn = document.getElementById('export-btn');
-    
-    const readerDiv = document.getElementById('reader');
-    const dataEntrySection = document.getElementById('data-entry-section');
-    const logList = document.getElementById('log-list');
-    const scanCount = document.getElementById('scan-count');
 
-    // Start Scanning (forces environment/rear camera with a wide rectangular target frame)
-    startBtn.addEventListener('click', () => {
-        if (!deptInput.value.trim()) {
-            alert('Please enter a Department Name before scanning.');
-            return;
-        }
+    // --- CSV PARSING UTILITY ---
+    function parseCSV(text) {
+        const lines = text.split(/\r?\n/);
+        if (lines.length === 0 || lines[0].trim() === '') return [];
 
-        readerDiv.style.display = 'block';
-        startBtn.classList.add('hidden');
-        stopBtn.classList.remove('hidden');
-
-        html5QrcodeScanner = new Html5Qrcode("reader");
+        // Parse headers and find exact key positions map
+        const rawHeaders = lines[0].split(',').map(h => h.trim().toUpperCase());
         
-        html5QrcodeScanner.start(
-            { facingMode: "environment" }, // Forces back camera
-            {
-                fps: 20, // Increased frame rate for faster barcode processing
-                qrbox: { width: 350, height: 150 } // Wide rectangle box tailored for long alphanumeric barcodes
-            },
-            (decodedText) => {
-                // On Successful Scan
-                binInput.value = decodedText;
-                dataEntrySection.classList.remove('hidden');
-                qtyInput.focus(); // Direct keyboard focus for quick typing on mobile
-                stopScanner();
-            },
-            (errorMessage) => {
-                // Ignore matching errors while looking for barcodes
+        // Save headers to maintain original casing on export if desired
+        if(rawHeaders.includes('BIN')) {
+            csvHeaders = lines[0].split(',').map(h => h.trim());
+        }
+
+        const binIdx = rawHeaders.indexOf('BIN');
+        const depIdx = rawHeaders.indexOf('DEP');
+        const divIdx = rawHeaders.indexOf('DIV');
+        const qtyIdx = rawHeaders.indexOf('QTY');
+
+        if (binIdx === -1 || depIdx === -1 || divIdx === -1 || qtyIdx === -1) {
+            alert("Error: Your CSV must contain 'BIN', 'DEP', 'DIV', and 'QTY' columns.");
+            return [];
+        }
+
+        const data = [];
+        for (let i = 1; i < lines.length; i++) {
+            if (lines[i].trim() === '') continue;
+            
+            // Handle basic commas inside rows safely
+            const rowValues = lines[i].split(',').map(v => v.trim().replace(/^"|"$/g, ''));
+            
+            if(rowValues.length <= Math.max(binIdx, depIdx, divIdx, qtyIdx)) continue;
+
+            data.push({
+                id: i - 1, // Unique ID for tracking UI elements
+                BIN: rowValues[binIdx],
+                DEP: rowValues[depIdx],
+                DIV: rowValues[divIdx],
+                QTY: rowValues[qtyIdx] || '0'
+            });
+        }
+        return data;
+    }
+
+    // --- FILE UPLOAD HANDLER ---
+    fileInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = function(evt) {
+            const text = evt.target.result;
+            inventoryData = parseCSV(text);
+
+            if (inventoryData.length > 0) {
+                uploadStatus.classList.remove('hidden');
+                workflowSection.classList.remove('hidden');
+                populateFilters();
+                renderMatches();
             }
-        ).catch((err) => {
-            alert("Camera initialization failed. Please verify HTTPS / camera permissions: " + err);
-            stopScanner();
-        });
-    });
-
-    stopBtn.addEventListener('click', stopScanner);
-
-    function stopScanner() {
-        if (html5QrcodeScanner) {
-            html5QrcodeScanner.stop().then(() => {
-                readerDiv.style.display = 'none';
-                startBtn.classList.remove('hidden');
-                stopBtn.classList.add('hidden');
-            }).catch(err => console.error(err));
-        }
-    }
-
-    // Save Entry to Memory
-    saveBtn.addEventListener('click', () => {
-        const dept = deptInput.value.trim();
-        const bin = binInput.value.trim();
-        const qty = qtyInput.value.trim();
-
-        if (!qty || isNaN(qty) || parseInt(qty) < 0) {
-            alert('Please enter a valid quantity.');
-            return;
-        }
-
-        const entry = {
-            timestamp: new Date().toLocaleString(),
-            department: dept,
-            binNumber: bin,
-            quantity: qty
         };
-
-        scannedDataList.push(entry);
-        updateLogUI();
-
-        // Reset inputs for the next barcode
-        binInput.value = '';
-        qtyInput.value = '';
-        dataEntrySection.classList.add('hidden');
+        reader.readAsText(file);
     });
 
-    // Update UI Log list
-    function updateLogUI() {
-        logList.innerHTML = '';
-        scanCount.textContent = scannedDataList.length;
+    // --- POPULATE DYNAMIC SELECT DROP DOWNS ---
+    function populateFilters() {
+        // Collect unique values
+        const uniqueDivs = [...new Set(inventoryData.map(item => item.DIV))].sort();
+        const uniqueDeps = [...new Set(inventoryData.map(item => item.DEP))].sort();
 
-        // Display newest entries at the top
-        [...scannedDataList].reverse().forEach(item => {
-            const li = document.createElement('li');
-            li.className = 'log-item';
-            li.innerHTML = `
-                <span><strong>${item.binNumber}</strong> (${item.department})</span>
-                <span>Qty: ${item.quantity}</span>
-            `;
-            logList.appendChild(li);
+        // Reset Options
+        divSelect.innerHTML = '<option value="">-- All Divisions --</option>';
+        depSelect.innerHTML = '<option value="">-- All Departments --</option>';
+
+        uniqueDivs.forEach(div => {
+            if(div) divSelect.innerHTML += `<option value="${div}">${div}</option>`;
+        });
+
+        uniqueDeps.forEach(dep => {
+            if(dep) depSelect.innerHTML += `<option value="${dep}">${dep}</option>`;
         });
     }
 
-    // Export Data Array to Downloadable CSV File
-    exportBtn.addEventListener('click', () => {
-        if (scannedDataList.length === 0) {
-            alert('No scanned data available to export.');
+    // --- INTERACTIVE EVENT LISTENERS ---
+    divSelect.addEventListener('change', renderMatches);
+    depSelect.addEventListener('change', renderMatches);
+    searchBox.addEventListener('input', renderMatches);
+
+    // --- MATCH SELECTION & RENDER TILES ---
+    function renderMatches() {
+        const selectedDiv = divSelect.value;
+        const selectedDep = depSelect.value;
+        const query = searchBox.value.trim().toLowerCase();
+
+        // Filter data array dynamically
+        const filtered = inventoryData.filter(item => {
+            const matchesDiv = !selectedDiv || item.DIV === selectedDiv;
+            const matchesDep = !selectedDep || item.DEP === selectedDep;
+            const matchesSearch = !query || item.BIN.toLowerCase().includes(query);
+            return matchesDiv && matchesDep && matchesSearch;
+        });
+
+        resultsContainer.innerHTML = '';
+
+        if (filtered.length === 0) {
+            resultsContainer.innerHTML = '<div class="no-results">No matching bins found. Try adjusting your filters.</div>';
             return;
         }
 
-        let csvContent = "data:text/csv;charset=utf-8,";
-        csvContent += "Timestamp,Department,Bin Number,Quantity\n"; // Headers
+        // Display maximum 30 elements at a time to prevent mobile lag
+        const displayLimit = filtered.slice(0, 30);
 
-        scannedDataList.forEach(row => {
-            // Standard escaping for CSV compatibility
-            const formattedDept = `"${row.department.replace(/"/g, '""')}"`;
-            const formattedBin = `"${row.binNumber.replace(/"/g, '""')}"`;
-            csvContent += `${row.timestamp},${formattedDept},${formattedBin},${row.quantity}\n`;
+        displayLimit.forEach(item => {
+            const tile = document.createElement('div');
+            tile.className = 'bin-tile';
+            tile.innerHTML = `
+                <div class="tile-grid">
+                    <div class="tile-field full-width">
+                        <div class="label">Bin Number</div>
+                        <div class="value">${item.BIN}</div>
+                    </div>
+                    <div class="tile-field">
+                        <div class="label">Department (DEP)</div>
+                        <div class="value">${item.DEP}</div>
+                    </div>
+                    <div class="tile-field">
+                        <div class="label">Division (DIV)</div>
+                        <div class="value">${item.DIV}</div>
+                    </div>
+                </div>
+                <div class="qty-update-row">
+                    <label style="margin:0; font-size:0.85rem;">Count:</label>
+                    <input type="number" id="input-qty-${item.id}" value="${item.QTY}" inputmode="numeric" placeholder="Qty">
+                    <button class="btn btn-primary" style="padding: 8px 12px; font-size:0.85rem;" onclick="updateQty(${item.id})">Save</button>
+                </div>
+            `;
+            resultsContainer.appendChild(tile);
         });
 
+        if(filtered.length > 30) {
+            const notice = document.createElement('div');
+            notice.className = 'no-results';
+            notice.style.borderTop = '1px dashed var(--border)';
+            notice.style.marginTop = '10px';
+            notice.innerText = `Showing 30 of ${filtered.length} total matches. Refine your search string to narrow down results.`;
+            resultsContainer.appendChild(notice);
+        }
+    }
+
+    // --- SAVE SINGLE QUANTITY ACTION ---
+    window.updateQty = function(id) {
+        const inputField = document.getElementById(`input-qty-${id}`);
+        const newValue = inputField.value.trim();
+
+        if (newValue === '' || isNaN(newValue)) {
+            alert('Please enter a valid numeric value.');
+            return;
+        }
+
+        // Find match in original global tracking array and commit changes
+        const record = inventoryData.find(item => item.id === id);
+        if (record) {
+            record.QTY = newValue;
+            
+            // Briefly pulse input border green to confirm save on mobile device
+            inputField.style.borderColor = 'var(--success)';
+            setTimeout(() => {
+                inputField.style.borderColor = 'var(--border)';
+            }, 800);
+        }
+    };
+
+    // --- CSV EXPORT GENERATOR ---
+    exportBtn.addEventListener('click', () => {
+        if (inventoryData.length === 0) return;
+
+        // Build explicit lookup translation map back to original indexes
+        const headerMap = csvHeaders.map(h => h.toUpperCase());
+        const binPos = headerMap.indexOf('BIN');
+        const depPos = headerMap.indexOf('DEP');
+        const divPos = headerMap.indexOf('DIV');
+        const qtyPos = headerMap.indexOf('QTY');
+
+        // Compile headers line
+        let csvContent = "data:text/csv;charset=utf-8,";
+        csvContent += csvHeaders.join(",") + "\n";
+
+        // Assemble rows using positions
+        inventoryData.forEach(row => {
+            let lineArr = new Array(4);
+            lineArr[binPos] = `"${row.BIN.replace(/"/g, '""')}"`;
+            lineArr[depPos] = `"${row.DEP.replace(/"/g, '""')}"`;
+            lineArr[divPos] = `"${row.DIV.replace(/"/g, '""')}"`;
+            lineArr[qtyPos] = row.QTY;
+            
+            csvContent += lineArr.join(",") + "\n";
+        });
+
+        // Trigger secure web browser downloader
         const encodedUri = encodeURI(csvContent);
         const link = document.createElement("a");
         link.setAttribute("href", encodedUri);
         
-        const dateStr = new Date().toISOString().slice(0,10);
-        link.setAttribute("download", `bin_scan_report_${dateStr}.csv`);
+        const timestamp = new Date().toISOString().slice(0,10);
+        link.setAttribute("download", `counted_bins_report_${timestamp}.csv`);
         
         document.body.appendChild(link);
         link.click();

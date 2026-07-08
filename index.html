@@ -98,6 +98,11 @@
             display: none;
         }
 
+        /* Adjusts internal html5-qrcode video layer for better responsiveness */
+        #reader video {
+            object-fit: cover !important;
+        }
+
         .hidden {
             display: none !important;
         }
@@ -140,7 +145,7 @@
 
     <div class="form-group">
         <label for="department">Department Name</label>
-        <input type="text" id="department" placeholder="e.g., Receiving, Aisle 4">
+        <input type="text" id="department" placeholder="e.g., Receiving, Warehouse A">
     </div>
 
     <button id="start-scan-btn" class="btn-primary">Open Camera Scanner</button>
@@ -187,7 +192,7 @@
     const logList = document.getElementById('log-list');
     const scanCount = document.getElementById('scan-count');
 
-    // Start Scanning (forces environment/rear camera)
+    // Start Scanning (forces environment/rear camera with a wide rectangular target frame)
     startBtn.addEventListener('click', () => {
         if (!deptInput.value.trim()) {
             alert('Please enter a Department Name before scanning.');
@@ -201,23 +206,23 @@
         html5QrcodeScanner = new Html5Qrcode("reader");
         
         html5QrcodeScanner.start(
-            { facingMode: "environment" }, // Forces rear camera
+            { facingMode: "environment" }, // Forces back camera
             {
-                fps: 10,
-                qrbox: { width: 250, height: 250 } // Framing box for barcode alignment
+                fps: 20, // Increased frame rate for faster barcode processing
+                qrbox: { width: 350, height: 150 } // Wide rectangle box tailored for long alphanumeric barcodes
             },
             (decodedText) => {
-                // On Success Scan
+                // On Successful Scan
                 binInput.value = decodedText;
                 dataEntrySection.classList.remove('hidden');
-                qtyInput.focus(); // Auto focus quantity for fast mobile entry
+                qtyInput.focus(); // Direct keyboard focus for quick typing on mobile
                 stopScanner();
             },
             (errorMessage) => {
-                // Verbose parsing errors can be ignored safely
+                // Ignore matching errors while looking for barcodes
             }
         ).catch((err) => {
-            alert("Camera initialization failed: " + err);
+            alert("Camera initialization failed. Please verify HTTPS / camera permissions: " + err);
             stopScanner();
         });
     });
@@ -255,18 +260,18 @@
         scannedDataList.push(entry);
         updateLogUI();
 
-        // Reset fields for next scan
+        // Reset inputs for the next barcode
         binInput.value = '';
         qtyInput.value = '';
         dataEntrySection.classList.add('hidden');
     });
 
-    // Update the UI Log list
+    // Update UI Log list
     function updateLogUI() {
         logList.innerHTML = '';
         scanCount.textContent = scannedDataList.length;
 
-        // Display items reverse-chronologically (newest on top)
+        // Display newest entries at the top
         [...scannedDataList].reverse().forEach(item => {
             const li = document.createElement('li');
             li.className = 'log-item';
@@ -278,10 +283,10 @@
         });
     }
 
-    // Export Memory Array to CSV File
+    // Export Data Array to Downloadable CSV File
     exportBtn.addEventListener('click', () => {
         if (scannedDataList.length === 0) {
-            alert('No data to export yet!');
+            alert('No scanned data available to export.');
             return;
         }
 
@@ -289,7 +294,7 @@
         csvContent += "Timestamp,Department,Bin Number,Quantity\n"; // Headers
 
         scannedDataList.forEach(row => {
-            // Escape quotes just in case text contains commas
+            // Standard escaping for CSV compatibility
             const formattedDept = `"${row.department.replace(/"/g, '""')}"`;
             const formattedBin = `"${row.binNumber.replace(/"/g, '""')}"`;
             csvContent += `${row.timestamp},${formattedDept},${formattedBin},${row.quantity}\n`;
@@ -299,7 +304,6 @@
         const link = document.createElement("a");
         link.setAttribute("href", encodedUri);
         
-        // Dynamic file name with date stamp
         const dateStr = new Date().toISOString().slice(0,10);
         link.setAttribute("download", `bin_scan_report_${dateStr}.csv`);
         

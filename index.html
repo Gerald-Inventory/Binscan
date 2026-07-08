@@ -246,7 +246,6 @@
     const exportBtn = document.getElementById('export-btn');
 
     // --- AUTO RUNTIME HOOK ---
-    // Instantly fires background sync to grab the csv located in your root directory
     window.addEventListener('DOMContentLoaded', () => {
         fetch('bins.csv')
             .then(response => {
@@ -385,7 +384,7 @@
         }
     }
 
-    // --- INSTANT MEMORY ROW WRITE back ---
+    // --- INSTANT MEMORY ROW WRITE BACK ---
     window.updateQty = function(id) {
         const inputField = document.getElementById(`input-qty-${id}`);
         const newValue = inputField.value.trim();
@@ -403,7 +402,7 @@
         }
     };
 
-    // --- COMPREHENSIVE CSV EXPORTER ---
+    // --- COMPREHENSIVE CSV EXPORTER (Robust Blob Architecture) ---
     exportBtn.addEventListener('click', () => {
         if (inventoryData.length === 0) return;
 
@@ -413,8 +412,7 @@
         const divPos = headerMap.indexOf('DIV');
         const qtyPos = headerMap.indexOf('QTY');
 
-        let csvContent = "data:text/csv;charset=utf-8,";
-        csvContent += csvHeaders.join(",") + "\n";
+        let csvContent = csvHeaders.join(",") + "\n";
 
         inventoryData.forEach(row => {
             let lineArr = new Array(4);
@@ -426,9 +424,12 @@
             csvContent += lineArr.join(",") + "\n";
         });
 
-        const encodedUri = encodeURI(csvContent);
+        // Use Blob framework to easily process thousands of lines safely
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        
         const link = document.createElement("a");
-        link.setAttribute("href", encodedUri);
+        link.setAttribute("href", url);
         
         const timestamp = new Date().toISOString().slice(0,10);
         link.setAttribute("download", `counted_bins_report_${timestamp}.csv`);
@@ -436,6 +437,9 @@
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+        
+        // Clear object string out of browser active cache
+        URL.revokeObjectURL(url);
     });
 </script>
 </body>

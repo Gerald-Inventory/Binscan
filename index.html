@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bin Count Portal</title>
+    <title>Bin Count Portal (Centralized)</title>
     <style>
         :root {
             --primary: #1e3a8a;
@@ -113,8 +113,8 @@
         .btn:active { opacity: 0.8; }
         .btn-success { background-color: var(--success); color: white; }
         .btn-primary { background-color: var(--accent); color: white; }
+        .btn-danger { background-color: #dc2626; color: white; }
 
-        /* System Status Messages */
         #loading-overlay {
             text-align: center;
             padding: 30px 10px;
@@ -178,6 +178,11 @@
             padding: 15px 0;
             font-size: 0.9rem;
         }
+        
+        .flex-buttons {
+            display: flex;
+            gap: 10px;
+        }
     </style>
 </head>
 <body>
@@ -225,18 +230,21 @@
 
         <div class="card">
             <div class="card-title">3. Complete Session</div>
-            <button id="export-btn" class="btn btn-success">
-                Export Counts to CSV
-            </button>
+            <div class="flex-buttons">
+                <button id="export-btn" class="btn btn-success">Export Counts to CSV</button>
+                <button id="clear-btn" class="btn btn-danger" style="width: 35%;">Clear Saved</button>
+            </div>
         </div>
     </div>
 </div>
 
 <script>
+    // Paste your Google Web App URL here
+    const GOOGLE_APP_URL = "https://script.google.com/macros/s/AKfycbwB6r62k3JeHYHlwVDvsyYJoI-07EclqZ_VojlmHCjaj-9yOBLGvAUU_zwLhqlw53PO9Q/exec";
+
     let inventoryData = [];
     let csvHeaders = ['BIN', 'DEP', 'DIV', 'QTY']; 
 
-    // DOM Links
     const loadingOverlay = document.getElementById('loading-overlay');
     const workflowSection = document.getElementById('workflow-section');
     const divSelect = document.getElementById('filter-div');
@@ -244,6 +252,7 @@
     const searchBox = document.getElementById('search-box');
     const resultsContainer = document.getElementById('results-container');
     const exportBtn = document.getElementById('export-btn');
+    const clearBtn = document.getElementById('clear-btn');
 
     // --- AUTO RUNTIME HOOK ---
     window.addEventListener('DOMContentLoaded', () => {
@@ -257,6 +266,7 @@
             .then(text => {
                 inventoryData = parseCSV(text);
                 if (inventoryData.length > 0) {
+                    loadSavedCounts();
                     loadingOverlay.classList.add('hidden');
                     workflowSection.classList.remove('hidden');
                     populateFilters();
@@ -270,7 +280,7 @@
             });
     });
 
-    // --- CSV DETAILED PARSING ENGINE ---
+    // --- CSV PARSING ENGINE ---
     function parseCSV(text) {
         const lines = text.split(/\r?\n/);
         if (lines.length === 0 || lines[0].trim() === '') return [];
@@ -287,7 +297,7 @@
         const qtyIdx = rawHeaders.indexOf('QTY');
 
         if (binIdx === -1 || depIdx === -1 || divIdx === -1 || qtyIdx === -1) {
-            alert("Header Layout Error: Verify 'BIN', 'DEP', 'DIV', 'QTY' match exactly inside your uploaded csv file.");
+            alert("Header Layout Error: Verify 'BIN', 'DEP', 'DIV', 'QTY' match exactly inside your bins.csv file.");
             return [];
         }
 
@@ -308,6 +318,29 @@
         return data;
     }
 
+    // --- LOCAL STORAGE DATA SYNC ---
+    function loadSavedCounts() {
+        const savedData = localStorage.getItem('localBinCounts');
+        if (savedData) {
+            const countsMap = JSON.parse(savedData);
+            inventoryData.forEach(item => {
+                if (countsMap[item.BIN] !== undefined) {
+                    item.QTY = countsMap[item.BIN];
+                }
+            });
+        }
+    }
+
+    function saveToLocalStorage() {
+        const countsMap = {};
+        inventoryData.forEach(item => {
+            if (item.QTY !== '0' && item.QTY !== '') {
+                countsMap[item.BIN] = item.QTY;
+            }
+        });
+        localStorage.setItem('localBinCounts', JSON.stringify(countsMap));
+    }
+
     // --- DROP DOWN OPTION ARCHITECTURE ---
     function populateFilters() {
         const uniqueDivs = [...new Set(inventoryData.map(item => item.DIV))].sort();
@@ -320,7 +353,6 @@
         uniqueDeps.forEach(dep => { if(dep) depSelect.innerHTML += `<option value="${dep}">${dep}</option>`; });
     }
 
-    // --- LISTENER ASSIGNMENTS ---
     divSelect.addEventListener('change', renderMatches);
     depSelect.addEventListener('change', renderMatches);
     searchBox.addEventListener('input', renderMatches);
@@ -368,7 +400,7 @@
                 <div class="qty-update-row">
                     <label style="margin:0; font-size:0.85rem;">Count:</label>
                     <input type="number" id="input-qty-${item.id}" value="${item.QTY}" inputmode="numeric" placeholder="Qty">
-                    <button class="btn btn-primary" style="padding: 8px 12px; font-size:0.85rem;" onclick="updateQty(${item.id})">Save</button>
+                    <button id="btn-save-${item.id}" class="btn btn-primary" style="padding: 8px 12px; font-size:0.85rem;" onclick="updateQty(${item.id})">Save</button>
                 </div>
             `;
             resultsContainer.appendChild(tile);
@@ -384,9 +416,10 @@
         }
     }
 
-    // --- INSTANT MEMORY ROW WRITE BACK ---
+    // --- INSTANT SAVE (LOCAL & GOOGLE SHEETS CLOUD) ---
     window.updateQty = function(id) {
         const inputField = document.getElementById(`input-qty-${id}`);
+        const saveButton = document.getElementById(`btn-save-${id}`);
         const newValue = inputField.value.trim();
 
         if (newValue === '' || isNaN(newValue)) {
@@ -397,26 +430,70 @@
         const record = inventoryData.find(item => item.id === id);
         if (record) {
             record.QTY = newValue;
-            inputField.style.borderColor = 'var(--success)';
-            setTimeout(() => { inputField.style.borderColor = 'var(--border)'; }, 800);
+            saveToLocalStorage(); // 1. Save offline locally instantly
+            
+            inputField.style.borderColor = '#e2e8f0';
+            saveButton.innerText = "Saving...";
+            saveButton.disabled = true;
+
+            // 2. Sync online to Google Sheets Central Database
+            if (GOOGLE_APP_URL && GOOGLE_APP_URL !== "YOUR_GOOGLE_WEB_APP_URL_HERE") {
+                fetch(GOOGLE_APP_URL, {
+                    method: 'POST',
+                    mode: 'no-cors', // Bypasses CORS issues safely with Apps Script
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        bin: record.BIN,
+                        dep: record.DEP,
+                        div: record.DIV,
+                        qty: newValue
+                    })
+                })
+                .then(() => {
+                    saveButton.innerText = "Saved";
+                    saveButton.style.backgroundColor = 'var(--success)';
+                    inputField.style.borderColor = 'var(--success)';
+                    
+                    setTimeout(() => { 
+                        saveButton.innerText = "Save"; 
+                        saveButton.style.backgroundColor = 'var(--accent)';
+                        inputField.style.borderColor = 'var(--border)';
+                        saveButton.disabled = false;
+                    }, 1200);
+                })
+                .catch(err => {
+                    console.error("Cloud saving failed:", err);
+                    saveButton.innerText = "Local OK";
+                    saveButton.style.backgroundColor = '#f59e0b'; // Amber fallback
+                    saveButton.disabled = false;
+                });
+            } else {
+                // If script URL isn't configured, fall back gracefully to local storage only
+                saveButton.innerText = "Saved (Loc)";
+                inputField.style.borderColor = 'var(--success)';
+                setTimeout(() => { 
+                    saveButton.innerText = "Save"; 
+                    inputField.style.borderColor = 'var(--border)';
+                }, 1200);
+            }
         }
     };
 
-    // --- OPTIMIZED FILTERED CSV EXPORTER ---
+    // --- CLEAR LOCAL DATA ---
+    clearBtn.addEventListener('click', () => {
+        if (confirm("Are you sure you want to clear saved counts on this browser? This does not erase the central Google Sheet, only this phone's visual screen.")) {
+            localStorage.removeItem('localBinCounts');
+            inventoryData.forEach(item => item.QTY = '0');
+            renderMatches();
+            alert("Saved progress cleared locally.");
+        }
+    });
+
+    // --- CSV EXPORTER (Local backup download) ---
     exportBtn.addEventListener('click', () => {
         if (inventoryData.length === 0) return;
-
-        // Filter out any rows where the user hasn't touched the QTY field, 
-        // or left it blank/zero. Only picks up rows with positive counts.
-        const countedItems = inventoryData.filter(item => {
-            const qtyStr = String(item.QTY).trim();
-            return qtyStr !== '' && qtyStr !== '0';
-        });
-
-        if (countedItems.length === 0) {
-            alert("No counts entered yet! Enter at least one quantity to export.");
-            return;
-        }
 
         const headerMap = csvHeaders.map(h => h.toUpperCase());
         const binPos = headerMap.indexOf('BIN');
@@ -424,10 +501,10 @@
         const divPos = headerMap.indexOf('DIV');
         const qtyPos = headerMap.indexOf('QTY');
 
-        let csvContent = csvHeaders.join(",") + "\n";
+        let csvContent = "data:text/csv;charset=utf-8,";
+        csvContent += csvHeaders.join(",") + "\n";
 
-        // Exporting ONLY the items that were counted
-        countedItems.forEach(row => {
+        inventoryData.forEach(row => {
             let lineArr = new Array(4);
             lineArr[binPos] = `"${row.BIN.replace(/"/g, '""')}"`;
             lineArr[depPos] = `"${row.DEP.replace(/"/g, '""')}"`;
@@ -437,11 +514,9 @@
             csvContent += lineArr.join(",") + "\n";
         });
 
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        
+        const encodedUri = encodeURI(csvContent);
         const link = document.createElement("a");
-        link.setAttribute("href", url);
+        link.setAttribute("href", encodedUri);
         
         const timestamp = new Date().toISOString().slice(0,10);
         link.setAttribute("download", `counted_bins_report_${timestamp}.csv`);
@@ -449,8 +524,6 @@
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-        
-        URL.revokeObjectURL(url);
     });
 </script>
 </body>

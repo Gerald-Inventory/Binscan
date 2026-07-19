@@ -307,12 +307,16 @@
             const rowValues = lines[i].split(',').map(v => v.trim().replace(/^"|"$/g, ''));
             if(rowValues.length <= Math.max(binIdx, depIdx, divIdx, qtyIdx)) continue;
 
+            let parsedQty = rowValues[qtyIdx] || '';
+            // If the CSV explicitly contains '0', treat it as a blank entry so inputs stay clean
+            if (parsedQty === '0') parsedQty = '';
+
             data.push({
                 id: i - 1,
                 BIN: rowValues[binIdx],
                 DEP: rowValues[depIdx],
                 DIV: rowValues[divIdx],
-                QTY: rowValues[qtyIdx] || '0'
+                QTY: parsedQty
             });
         }
         return data;
@@ -334,7 +338,7 @@
     function saveToLocalStorage() {
         const countsMap = {};
         inventoryData.forEach(item => {
-            if (item.QTY !== '0' && item.QTY !== '') {
+            if (item.QTY !== '') {
                 countsMap[item.BIN] = item.QTY;
             }
         });
@@ -381,6 +385,7 @@
 
         displayLimit.forEach(item => {
             const tile = document.createElement('div');
+            const tile = document.createElement('div');
             tile.className = 'bin-tile';
             tile.innerHTML = `
                 <div class="tile-grid">
@@ -422,7 +427,7 @@
         const saveButton = document.getElementById(`btn-save-${id}`);
         const newValue = inputField.value.trim();
 
-        if (newValue === '' || isNaN(newValue)) {
+        if (newValue !== '' && isNaN(newValue)) {
             alert('Please enter a valid numeric value.');
             return;
         }
@@ -448,7 +453,7 @@
                         bin: record.BIN,
                         dep: record.DEP,
                         div: record.DIV,
-                        qty: newValue
+                        qty: newValue // Will send empty string if field is cleared
                     })
                 })
                 .then(() => {
@@ -485,7 +490,7 @@
     clearBtn.addEventListener('click', () => {
         if (confirm("Are you sure you want to clear saved counts on this browser? This does not erase the central Google Sheet, only this phone's visual screen.")) {
             localStorage.removeItem('localBinCounts');
-            inventoryData.forEach(item => item.QTY = '0');
+            inventoryData.forEach(item => item.QTY = '');
             renderMatches();
             alert("Saved progress cleared locally.");
         }
@@ -509,7 +514,7 @@
             lineArr[binPos] = `"${row.BIN.replace(/"/g, '""')}"`;
             lineArr[depPos] = `"${row.DEP.replace(/"/g, '""')}"`;
             lineArr[divPos] = `"${row.DIV.replace(/"/g, '""')}"`;
-            lineArr[qtyPos] = row.QTY;
+            lineArr[qtyPos] = row.QTY === '' ? '0' : row.QTY; // Exports blank values as 0 for safe spreadsheet layout
             
             csvContent += lineArr.join(",") + "\n";
         });
